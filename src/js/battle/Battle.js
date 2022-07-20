@@ -299,6 +299,43 @@ function Battle(){
 		return effectiveness;
 	}
 
+	//Function that returns an array of events about the buffs of the used move
+
+	this.getBuffsToBeApplied = function(move, defender, attacker){
+		var buffsToBeApplied = [];
+
+		switch (move.buffTarget){
+			case "opponent":
+				buffsToBeApplied[0] = {
+					buffTarget: defender,
+					buffs: move.buffs,
+					move: move
+				};
+				break;
+			case "self":
+				buffsToBeApplied[0] = {
+					buffTarget: attacker,
+					buffs: move.buffs,
+					move: move
+				};
+				break;
+			case "both":
+				buffsToBeApplied[0] = {
+					buffTarget: attacker,
+					buffs: move.buffs[0],
+					move: move
+				};
+				buffsToBeApplied[1] = {
+					buffTarget: defender,
+					buffs: move.buffs[1],
+					move: move
+				};
+				break;
+		}
+
+		return buffsToBeApplied;
+	}
+
 	// Helper function that returns an array of weaknesses, resistances, and immunities given defensive type
 
 	this.getTypeTraits = function(type){
@@ -2498,48 +2535,48 @@ function Battle(){
 
 			if(buffRoll > 1 - move.buffApplyChance){
 
-				var buffTarget = attacker;
+				var buffsToBeApplied = this.getBuffsToBeApplied(move, defender, attacker);
 
-				if(move.buffTarget == "opponent"){
-					buffTarget = defender;
-				}
-
-				buffTarget.applyStatBuffs(move.buffs);
-
-				buffApplied = true;
-
-				var buffType = "debuff";
-
-				if((move.buffs[0] > 0) || (move.buffs[1] > 0)){
-					buffType = "buff";
-				}
-
-				type += " " + buffType;
-
-				// In emulated battles, add buff messages
-
-				if(mode == "emulate"){
-					var statNames = ["Attack","Defense"];
-
-					for(var i = move.buffs.length-1; i >= 0; i--){
-						if(move.buffs[i] != 0){
-							var statDescription = "";
-
-							if(move.buffs[i] < -1){
-								statDescription = "fell sharply";
-							} else if(move.buffs[i] == -1){
-								statDescription = "fell";
-							} else if(move.buffs[i] == 1){
-								statDescription = "rose";
-							} else if(move.buffs[i] > 1){
-								statDescription = "rose sharply";
-							}
-
-							turnMessages.push({ index: buffTarget.index, str: statNames[i] + " " + statDescription +"!"});
-						}
+				for(var i = 0; i < buffsToBeApplied.length; i++){
+					var buffEvent = buffsToBeApplied[i];
+					buffEvent.buffTarget.applyStatBuffs(buffEvent.buffs);
+										
+					var buffType = "debuff";
+					
+					if((buffEvent.buffs[0] > 0) || (buffEvent.buffs[1] > 0)){
+						buffType = "buff";
 					}
-				}
 
+					type += " " + buffType;
+	
+					// In emulated battles, add buff messages
+					
+					if(mode == "emulate"){
+						var statNames = ["Attack","Defense"];
+	
+						if(buffEvent.move.target != "both"){
+							for(var i = buffEvent.buffs.length-1; i >= 0; i--){
+								if(buffEvent.buffs[i] != 0){
+									var statDescription = "";
+								
+									if(buffEvent.buffs[i] < -1){
+										statDescription = "fell sharply";
+									} else if(buffEvent.buffs[i] == -1){
+										statDescription = "fell";
+									} else if(buffEvent.buffs[i] == 1){
+										statDescription = "rose";
+									} else if(buffEvent.buffs[i] > 1){
+										statDescription = "rose sharply";
+									}
+								
+									turnMessages.push({ index: buffEvent.buffTarget.index, str: statNames[i] + " " + statDescription +"!"});
+								}
+							}
+						}
+					}					
+				
+				}
+				buffApplied = true;
 			}
 
 		}
@@ -2558,18 +2595,45 @@ function Battle(){
 		} else{
 			var buffStr = "";
 
-			if(move.buffs[0] > 0){
-				buffStr += "+";
-			}
+			if(move.buffTarget != "both"){
+				if(move.buffs[0] > 0){
+					buffStr += "+";
+				}
 
-			buffStr += move.buffs[0] + " Attack<br>";
+				buffStr += move.buffs[0] + " Attack<br>";
 
-			if(move.buffs[1] > 0){
-				buffStr += "+";
-			}
+				if(move.buffs[1] > 0){
+					buffStr += "+";
+				}
 
-			if(move.buffs[1] != 0){
-				buffStr += move.buffs[1] + " Defense";
+				if(move.buffs[1] != 0){
+					buffStr += move.buffs[1] + " Defense";
+				}
+			} 
+			else{
+				for(var i = 0; i < move.buffs.length; i++){
+					var currentBuffs = move.buffs[i];
+					
+					//By default, the first element of the buff arrays is the buffs of the user
+					if(i == 0)
+						buffStr += "<b>User:</b><br>";
+					else
+						buffStr += "<b>Opponent:</b><br>";
+
+					if(currentBuffs[0] > 0){
+						buffStr += "+";
+					}
+	
+					buffStr += currentBuffs[0] + " Attack<br>";
+	
+					if(currentBuffs[1] > 0){
+						buffStr += "+";
+					}
+	
+					if(currentBuffs[1] != 0){
+						buffStr += currentBuffs[1] + " Defense<br>";
+					}				
+				}
 			}
 
 			timeline.push(new TimelineEvent(type, move.name, attacker.index, displayTime, turns, [damage, energyValue, percentDamage, buffStr]));
